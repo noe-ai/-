@@ -7,6 +7,8 @@ const settingsBtn = document.getElementById('settingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const overlay = document.getElementById('overlay');
+const modelProviderSelect = document.getElementById('modelProvider');
+const modelTypeSelect = document.getElementById('modelType');
 const apiKeyInput = document.getElementById('apiKey');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
@@ -44,20 +46,30 @@ let gameState = {
     storyFragments: [],
     selectedCards: [],
     usedCards: new Set(), // 记录已使用的卡片
-    apiKey: ''
+    apiKey: '',
+    modelProvider: 'volc', // 默认为火山方舟
+    modelType: 'deepseek-r1-250120' // 默认模型
 };
 
 // 初始化游戏
 function initGame() {
-    // 从本地存储加载API密钥
-    gameState.apiKey = localStorage.getItem('volcApiKey') || '';
+    // 从本地存储加载设置
+    gameState.apiKey = localStorage.getItem('aiApiKey') || '';
+    gameState.modelProvider = localStorage.getItem('modelProvider') || 'volc';
+    gameState.modelType = localStorage.getItem('modelType') || 'deepseek-r1-250120';
+    
+    // 设置表单值
     apiKeyInput.value = gameState.apiKey;
+    modelProviderSelect.value = gameState.modelProvider;
+    updateModelOptions();
+    modelTypeSelect.value = gameState.modelType;
     
     // 设置事件监听器
     settingsBtn.addEventListener('click', openSettings);
     closeSettingsBtn.addEventListener('click', closeSettings);
     overlay.addEventListener('click', closeSettings);
     saveSettingsBtn.addEventListener('click', saveSettings);
+    modelProviderSelect.addEventListener('change', updateModelOptions);
     
     startGameBtn.addEventListener('click', startGame);
     card1.addEventListener('click', () => selectCard(0));
@@ -81,13 +93,47 @@ function closeSettings() {
     overlay.style.display = 'none';
 }
 
+// 更新模型选项显示
+function updateModelOptions() {
+    const provider = modelProviderSelect.value;
+    const zhipuModels = document.querySelectorAll('.zhipu-model');
+    const volcModels = document.querySelectorAll('.volc-model');
+    
+    if (provider === 'zhipu') {
+        zhipuModels.forEach(option => option.style.display = 'block');
+        volcModels.forEach(option => option.style.display = 'none');
+        // 如果当前选择的是火山模型，则切换到默认智谱模型
+        if (modelTypeSelect.value.includes('ep-') || modelTypeSelect.value.includes('deepseek')) {
+            modelTypeSelect.value = 'glm-4-air';
+        }
+    } else {
+        zhipuModels.forEach(option => option.style.display = 'none');
+        volcModels.forEach(option => option.style.display = 'block');
+        // 如果当前选择的是智谱模型，则切换到默认火山模型
+        if (modelTypeSelect.value.includes('glm')) {
+            modelTypeSelect.value = 'deepseek-r1-250120';
+        }
+    }
+}
+
 // 保存设置
 function saveSettings() {
     const apiKey = apiKeyInput.value.trim();
+    const modelProvider = modelProviderSelect.value;
+    const modelType = modelTypeSelect.value;
+    
     if (apiKey) {
+        // 保存设置到游戏状态
         gameState.apiKey = apiKey;
-        localStorage.setItem('volcApiKey', apiKey);
-        alert('API密钥已保存');
+        gameState.modelProvider = modelProvider;
+        gameState.modelType = modelType;
+        
+        // 保存设置到本地存储
+        localStorage.setItem('aiApiKey', apiKey);
+        localStorage.setItem('modelProvider', modelProvider);
+        localStorage.setItem('modelType', modelType);
+        
+        alert('设置已保存');
     } else {
         alert('请输入有效的API密钥');
         return;
@@ -180,21 +226,42 @@ async function generateStoryFragment(selectedCard) {
         
         prompt += `请以第一人称的视角，生成一个连贯、有趣的故事片段（200-300字左右），这个片段应该与我之前的选择保持连贯性，并为后续的发展留下可能性。请直接给出故事内容，不要有任何前缀说明。`;
         
-        // 调用API生成故事
-        const response = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${gameState.apiKey}`
-            },
-            body: JSON.stringify({
-                model: 'deepseek-r1-250120',
-                messages: [
-                    {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
-                    {role: 'user', content: prompt}
-                ]
-            })
-        });
+        let response;
+        
+        // 根据不同的模型提供商调用不同的API
+        if (gameState.modelProvider === 'zhipu') {
+            // 调用智谱AI API
+            response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${gameState.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: gameState.modelType, // glm-4-plus, glm-4-air, glm-4-air-0111, glm-4-flash
+                    messages: [
+                        {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                        {role: 'user', content: prompt}
+                    ]
+                })
+            });
+        } else {
+            // 调用火山方舟API
+            response = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${gameState.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: gameState.modelType, // ep-20250404110436-kfcvk, ep-20250218221648-dk6pj, deepseek-r1-250120
+                    messages: [
+                        {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                        {role: 'user', content: prompt}
+                    ]
+                })
+            });
+        }
         
         if (!response.ok) {
             throw new Error(`API请求失败: ${response.status}`);
