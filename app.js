@@ -2,6 +2,9 @@
  * 抽卡生成故事游戏主程序
  */
 
+// 用于控制故事生成的AbortController
+let storyGenerationController = null;
+
 // DOM元素
 const settingsBtn = document.getElementById('settingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -211,6 +214,21 @@ function selectCard(index) {
 // 生成故事片段
 async function generateStoryFragment(selectedCard) {
     try {
+        // 如果有正在进行的生成，先中止它
+        if (storyGenerationController) {
+            storyGenerationController.abort();
+        }
+        
+        // 创建新的AbortController
+        storyGenerationController = new AbortController();
+        const signal = storyGenerationController.signal;
+        
+        // 更新加载指示器文本
+        const loadingText = loadingIndicator.querySelector('p');
+        if (loadingText) {
+            loadingText.textContent = '正在构思故事...';
+        }
+        
         // 构建提示信息
         let prompt = `我正在玩一个抽卡生成故事的游戏，现在是第${gameState.currentRound}轮，共10轮。我选择了「${selectedCard.title}」这张卡片，描述是：${selectedCard.description}\n`;
         
@@ -226,62 +244,130 @@ async function generateStoryFragment(selectedCard) {
         
         prompt += `请以第一人称的视角，生成一个连贯、有趣的故事片段（200-300字左右），这个片段应该与我之前的选择保持连贯性，并为后续的发展留下可能性。请直接给出故事内容，不要有任何前缀说明。`;
         
-        let response;
+        // 清空故事内容区域，准备流式输出
+        storyContent.innerHTML = '';
         
-        // 根据不同的模型提供商调用不同的API
+        // 创建打字机效果的容器
+        const typingContainer = document.createElement('div');
+        typingContainer.className = 'typing-effect';
+        storyContent.appendChild(typingContainer);
+        
+        // 创建请求选项，包括AbortSignal
+        const requestOptions = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${gameState.apiKey}`
+            },
+            signal: signal
+        };
+        
+        // 根据不同的模型提供商设置不同的API URL和请求体
+        let apiUrl;
         if (gameState.modelProvider === 'zhipu') {
-            // 调用智谱AI API
-            response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${gameState.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: gameState.modelType, // glm-4-plus, glm-4-air, glm-4-air-0111, glm-4-flash
-                    messages: [
-                        {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
-                        {role: 'user', content: prompt}
-                    ]
-                })
+            apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            requestOptions.body = JSON.stringify({
+                model: gameState.modelType,
+                messages: [
+                    {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                    {role: 'user', content: prompt}
+                ],
+                stream: true // 启用流式输出
             });
         } else {
-            // 调用火山方舟API
-            response = await fetch('https://ark.cn-beijing.volces.com/api/v3/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${gameState.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: gameState.modelType, // ep-20250404110436-kfcvk, ep-20250218221648-dk6pj, deepseek-r1-250120
-                    messages: [
-                        {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
-                        {role: 'user', content: prompt}
-                    ]
-                })
+            apiUrl = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+            requestOptions.body = JSON.stringify({
+                model: gameState.modelType,
+                messages: [
+                    {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                    {role: 'user', content: prompt}
+                ],
+                stream: true // 启用流式输出
             });
         }
+        
+        // 更新加载指示器状态
+        if (loadingText) {
+            loadingText.textContent = '正在生成故事...';
+        }
+        
+        // 发送请求
+        const response = await fetch(apiUrl, requestOptions);
         
         if (!response.ok) {
             throw new Error(`API请求失败: ${response.status}`);
         }
         
-        const data = await response.json();
-        const storyFragment = data.choices[0].message.content.trim();
-        
-        // 存储故事片段
-        gameState.storyFragments.push(storyFragment);
-        
-        // 更新UI
-        storyContent.innerHTML = storyFragment;
+        // 隐藏加载指示器，显示正在生成的提示
         loadingIndicator.style.display = 'none';
+        
+        // 获取响应的可读流
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let completeStoryFragment = '';
+        let currentParagraph = '';
+        
+        // 处理流式响应
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            // 解码二进制数据
+            const chunk = decoder.decode(value, { stream: true });
+            
+            // 处理数据块
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data:') && line !== 'data: [DONE]') {
+                    try {
+                        // 提取JSON部分
+                        const jsonStr = line.substring(5).trim();
+                        if (jsonStr) {
+                            const data = JSON.parse(jsonStr);
+                            if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                                const content = data.choices[0].delta.content;
+                                completeStoryFragment += content;
+                                currentParagraph += content;
+                                
+                                // 使用打字机效果显示内容
+                                typingContainer.innerHTML = formatStoryText(completeStoryFragment);
+                                
+                                // 自动滚动到底部
+                                storyContent.scrollTop = storyContent.scrollHeight;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('解析流数据出错:', e, line);
+                    }
+                }
+            }
+        }
+        
+        // 存储完整的故事片段
+        gameState.storyFragments.push(completeStoryFragment);
         
     } catch (error) {
-        console.error('生成故事时出错:', error);
-        storyContent.innerHTML = `<p class="error-message">生成故事时出错: ${error.message}</p><p>请检查API密钥是否正确，或稍后再试。</p>`;
+        // 如果是用户主动中止，则不显示错误
+        if (error.name === 'AbortError') {
+            console.log('故事生成已被用户中止');
+        } else {
+            console.error('生成故事时出错:', error);
+            storyContent.innerHTML = `<p class="error-message">生成故事时出错: ${error.message}</p><p>请检查API密钥是否正确，或稍后再试。</p>`;
+        }
+    } finally {
+        // 隐藏加载指示器
         loadingIndicator.style.display = 'none';
+        
+        // 重置控制器
+        storyGenerationController = null;
     }
+}
+
+// 格式化故事文本，处理段落和特殊字符
+function formatStoryText(text) {
+    // 将换行符转换为HTML段落
+    const paragraphs = text.split('\n').filter(p => p.trim() !== '');
+    return paragraphs.map(p => `<p>${p}</p>`).join('');
 }
 
 // 进入下一轮
