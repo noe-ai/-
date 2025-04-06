@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创意灵感生成器 - 互动创意生成游戏</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>创意灵感生成器</h1>
+            <p>选择卡片，激发你的创意灵感</p>
+            <div class="settings-btn" id="settingsBtn">
+                <i class="fas fa-cog"></i> 设置
+            </div>
+        </header>
+
+        <div class="game-container">
+            <div class="game-status">
+                <div class="round-info">回合: <span id="currentRound">0</span>/10</div>
+                <div class="progress-bar">
+                    <div class="progress" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div class="game-area">
+                <!-- 开始界面 -->
+                <div id="startScreen" class="screen active">
+                    <h2>欢迎来到创意灵感生成器</h2>
+                    <p>在这个游戏中，你将通过选择卡片来激发独特的创意灵感。</p>
+                    <p>每轮你将从两张卡片中选择一张，系统会根据你的选择生成创意片段。</p>
+                    <p>游戏共10轮，最终将形成一个完整的创意故事。</p>
+                    
+                    <div class="initial-setting">
+                        <h3>初始设定 (可选)</h3>
+                        <textarea id="initialSetting" placeholder="输入你希望的故事背景或角色设定..."></textarea>
+                    </div>
+                    
+                    <button id="startGameBtn" class="primary-btn">开始游戏</button>
+                </div>
+
+                <!-- 卡片选择界面 -->
+                <div id="cardScreen" class="screen">
+                    <h2>选择一张卡片</h2>
+                    <div class="cards-container">
+                        <div class="card" id="card1">
+                            <div class="card-inner">
+                                <div class="card-content">
+                                    <h3 id="card1Title">卡片1标题</h3>
+                                    <p id="card1Desc">卡片1描述</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card" id="card2">
+                            <div class="card-inner">
+                                <div class="card-content">
+                                    <h3 id="card2Title">卡片2标题</h3>
+                                    <p id="card2Desc">卡片2描述</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 故事生成界面 -->
+                <div id="storyScreen" class="screen">
+                    <div class="story-container">
+                        <div class="loading-indicator" id="loadingIndicator">
+                            <div class="spinner"></div>
+                            <p>正在生成故事...</p>
+                        </div>
+                        <div class="story-content" id="storyContent"></div>
+                    </div>
+                    <button id="nextRoundBtn" class="primary-btn">继续</button>
+                </div>
+
+                <!-- 结束界面 -->
+                <div id="endScreen" class="screen">
+                    <h2>你的故事已完成</h2>
+                    <div class="final-story-container">
+                        <h3>完整故事</h3>
+                        <div class="final-story" id="finalStory"></div>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="saveStoryBtn" class="secondary-btn"><i class="fas fa-save"></i> 保存故事</button>
+                        <button id="shareStoryBtn" class="secondary-btn"><i class="fas fa-share-alt"></i> 分享故事</button>
+                        <button id="newGameBtn" class="primary-btn">再玩一次</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置面板 -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <h2>设置</h2>
+                <button id="closeSettingsBtn" class="close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label for="apiKey">火山方舟 API 密钥</label>
+                    <input type="password" id="apiKey" placeholder="输入您的API密钥">
+                </div>
+                <div class="setting-actions">
+                    <button id="saveSettingsBtn" class="primary-btn">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2023 创意灵感生成器 - 一个互动故事生成游戏</p>
+    </footer>
+
+    <!-- 遮罩层 -->
+    <div class="overlay" id="overlay"></div>
+
+    <script src="cards.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
