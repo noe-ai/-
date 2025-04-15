@@ -257,7 +257,8 @@ async function generateStoryFragment(selectedCard) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${gameState.apiKey}`
+                // 确保API密钥不包含非ISO-8859-1字符，进行编码处理
+                'Authorization': `Bearer ${encodeURIComponent(gameState.apiKey)}`
             },
             signal: signal
         };
@@ -266,20 +267,42 @@ async function generateStoryFragment(selectedCard) {
         let apiUrl;
         if (gameState.modelProvider === 'zhipu') {
             apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            // 智谱API请求头处理
+            requestOptions.headers = {
+                'Content-Type': 'application/json',
+                // 确保API密钥不包含非ISO-8859-1字符，进行编码处理
+                'Authorization': `Bearer ${encodeURIComponent(gameState.apiKey)}`
+            };
+            // 构建系统提示，明确包含卡片内容
+            const systemPrompt = `你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。
+当前卡片：【${selectedCard.title}】 - ${selectedCard.description}
+请确保故事内容与卡片主题紧密相关。`;
+            
             requestOptions.body = JSON.stringify({
                 model: gameState.modelType,
                 messages: [
-                    {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                    {role: 'system', content: systemPrompt},
                     {role: 'user', content: prompt}
                 ],
                 stream: true // 启用流式输出
             });
         } else {
             apiUrl = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+            // 火山引擎API请求头处理
+            requestOptions.headers = {
+                'Content-Type': 'application/json',
+                // 确保API密钥不包含非ISO-8859-1字符，进行编码处理
+                'Authorization': `Bearer ${encodeURIComponent(gameState.apiKey)}`
+            };
+            // 构建系统提示，明确包含卡片内容
+            const systemPrompt = `你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。
+当前卡片：【${selectedCard.title}】 - ${selectedCard.description}
+请确保故事内容与卡片主题紧密相关。`;
+            
             requestOptions.body = JSON.stringify({
                 model: gameState.modelType,
                 messages: [
-                    {role: 'system', content: '你是一个创意故事生成器，根据用户的选择创作连贯有趣的第一视角故事片段。'},
+                    {role: 'system', content: systemPrompt},
                     {role: 'user', content: prompt}
                 ],
                 stream: true // 启用流式输出
@@ -295,7 +318,8 @@ async function generateStoryFragment(selectedCard) {
         const response = await fetch(apiUrl, requestOptions);
         
         if (!response.ok) {
-            throw new Error(`API请求失败: ${response.status}`);
+            const errorText = await response.text().catch(() => '无法获取错误详情');
+            throw new Error(`API请求失败: ${response.status} - ${response.statusText}\n详情: ${errorText}`);
         }
         
         // 隐藏加载指示器，显示正在生成的提示
@@ -352,7 +376,29 @@ async function generateStoryFragment(selectedCard) {
             console.log('故事生成已被用户中止');
         } else {
             console.error('生成故事时出错:', error);
-            storyContent.innerHTML = `<p class="error-message">生成故事时出错: ${error.message}</p><p>请检查API密钥是否正确，或稍后再试。</p>`;
+            
+            // 提供更友好的错误信息
+            let errorMessage = error.message;
+            let suggestion = '';
+            
+            // 根据错误类型提供具体建议
+            if (error.message.includes('401') || error.message.includes('认证失败') || error.message.includes('unauthorized')) {
+                suggestion = '您的API密钥可能无效或已过期，请在设置中更新API密钥。';
+            } else if (error.message.includes('404') || error.message.includes('找不到')) {
+                suggestion = 'API端点可能已更改，请联系开发者获取最新信息。';
+            } else if (error.message.includes('429') || error.message.includes('请求过多')) {
+                suggestion = '您的API请求次数已达上限，请稍后再试。';
+            } else if (error.message.includes('网络') || error.message.includes('Network') || error.message.includes('timeout')) {
+                suggestion = '网络连接出现问题，请检查您的网络连接并重试。';
+            } else if (error.message.includes('volces.com')) {
+                suggestion = 'API域名错误，正确的域名应为volc.com而不是volces.com，请联系开发者更新API地址。';
+            } else if (error.message.includes('non ISO-8859-1 code point') || error.message.includes('headers')) {
+                suggestion = '您的API密钥中可能包含特殊字符，请确保使用纯ASCII字符的API密钥，或联系API提供商获取正确格式的密钥。';
+            } else {
+                suggestion = '请检查API密钥是否正确，或稍后再试。如果问题持续存在，请联系开发者。';
+            }
+            
+            storyContent.innerHTML = `<p class="error-message">生成故事时出错: ${errorMessage}</p><p>${suggestion}</p>`;
         }
     } finally {
         // 隐藏加载指示器
