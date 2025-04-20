@@ -50,16 +50,16 @@ let gameState = {
     selectedCards: [],
     usedCards: new Set(), // 记录已使用的卡片
     apiKey: '',
-    modelProvider: 'volc', // 默认为火山方舟
-    modelType: 'deepseek-r1-250120' // 默认模型
+    modelProvider: 'zhipu', // 默认为智谱AI
+    modelType: 'glm-4-flash-250414' // 默认模型
 };
 
 // 初始化游戏
 function initGame() {
     // 从本地存储加载设置
     gameState.apiKey = localStorage.getItem('aiApiKey') || '';
-    gameState.modelProvider = localStorage.getItem('modelProvider') || 'volc';
-    gameState.modelType = localStorage.getItem('modelType') || 'deepseek-r1-250120';
+    gameState.modelProvider = localStorage.getItem('modelProvider') || 'zhipu';
+    gameState.modelType = localStorage.getItem('modelType') || 'glm-4-flash-250414';
     
     // 设置表单值
     apiKeyInput.value = gameState.apiKey;
@@ -107,7 +107,7 @@ function updateModelOptions() {
         volcModels.forEach(option => option.style.display = 'none');
         // 如果当前选择的是火山模型，则切换到默认智谱模型
         if (modelTypeSelect.value.includes('ep-') || modelTypeSelect.value.includes('deepseek')) {
-            modelTypeSelect.value = 'glm-4-air';
+            modelTypeSelect.value = 'glm-4-flash-250414';
         }
     } else {
         zhipuModels.forEach(option => option.style.display = 'none');
@@ -442,8 +442,13 @@ function endGame() {
     // 显示结束界面
     showScreen(endScreen);
     
-    // 显示完整故事
-    finalStory.innerHTML = gameState.storyFragments.join('<hr>');
+    // 显示完整故事并确保所有片段都被包含
+    const fullStory = gameState.storyFragments.join('<hr>');
+    if (fullStory.length > 0) {
+        finalStory.innerHTML = fullStory;
+    } else {
+        finalStory.innerHTML = '<p>没有生成任何故事内容</p>';
+    }
 }
 
 // 保存故事
